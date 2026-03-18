@@ -145,14 +145,19 @@ function createSession(opts) {
     env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1', COLORTERM: 'truecolor' },
   };
 
-  try {
-    proc = pty.spawn(isWin ? exe + '.cmd' : exe, args, spawnOpts);
-  } catch {
+  // On Windows, try multiple extensions: .exe first, then .cmd, then bare
+  const candidates = isWin ? [exe + '.exe', exe + '.cmd', exe] : [exe];
+  let lastErr;
+  for (const candidate of candidates) {
     try {
-      proc = pty.spawn(exe, args, spawnOpts);
-    } catch (e2) {
-      return { error: `Failed to spawn "${command}": ${e2.message}` };
+      proc = pty.spawn(candidate, args, spawnOpts);
+      break;
+    } catch (e) {
+      lastErr = e;
     }
+  }
+  if (!proc) {
+    return { error: `Failed to spawn "${command}": ${lastErr?.message}` };
   }
 
   const session = {
