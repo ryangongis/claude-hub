@@ -145,11 +145,19 @@ export const useStore = create<AppState>((set, get) => ({
   // ── Connection ───────────────────────────────────────────────
 
   connect: () => {
+    // Prevent duplicate connections (React Strict Mode calls effects twice)
+    const existing = get().socket;
+    if (existing && (existing.readyState === WebSocket.CONNECTING || existing.readyState === WebSocket.OPEN)) {
+      return;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = import.meta.env.DEV ? 'localhost:3100' : window.location.host;
     const ws = new WebSocket(`${protocol}//${host}/ws`);
 
-    ws.onopen = () => set({ socket: ws, connected: true });
+    set({ socket: ws });
+
+    ws.onopen = () => set({ connected: true });
 
     ws.onclose = () => {
       set({ socket: null, connected: false });
@@ -297,6 +305,8 @@ function handleMessage(msg: WSMessage, get: () => AppState, set: (partial: Parti
 
     case 'created': {
       const s = msg.session;
+      // Deduplicate: skip if session already exists
+      if (state.sessions.some(existing => existing.id === s.id)) break;
       set({
         sessions: [...state.sessions, s],
         activeSessionId: s.id,
